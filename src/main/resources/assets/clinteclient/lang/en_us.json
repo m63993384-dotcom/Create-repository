@@ -1,6 +1,5 @@
 {
-  "key.clinteclient.toggle_hud": "Toggle HUD",
   "key.category.clinteclient.main": "Clinte Client",
   "key.clinteclient.scan_chunks": "Scan sus chunks",
-  "key.clinteclient.server_mode": "Allow chunk scan on servers"
+  "key.clinteclient.open_menu": "Open menu"
 }
