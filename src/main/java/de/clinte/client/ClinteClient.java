@@ -10,15 +10,15 @@ import net.minecraft.client.KeyMapping;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.resources.Identifier;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import org.lwjgl.glfw.GLFW;
 
 public class ClinteClient implements ClientModInitializer {
 
-    private static boolean hudEnabled = true;
-    private static KeyMapping toggleKey;
+    private static KeyMapping menuKey;
     private static KeyMapping scanKey;
-    private static KeyMapping serverModeKey;
-    private static boolean serverScanAllowed = false; // nur für eigene Server, standardmäßig aus
+    private static boolean wasFullbright = false;
     private static final SusChunkScanner scanner = new SusChunkScanner();
 
     private static final int WHITE = 0xFFFFFFFF;
@@ -30,27 +30,24 @@ public class ClinteClient implements ClientModInitializer {
         KeyMapping.Category category = KeyMapping.Category.register(
                 Identifier.fromNamespaceAndPath("clinteclient", "main"));
 
-        toggleKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.clinteclient.toggle_hud", InputConstants.Type.KEYSYM,
+        menuKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
+                "key.clinteclient.open_menu", InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_RIGHT_SHIFT, category));
         scanKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
                 "key.clinteclient.scan_chunks", InputConstants.Type.KEYSYM,
                 GLFW.GLFW_KEY_K, category));
-        serverModeKey = KeyBindingHelper.registerKeyBinding(new KeyMapping(
-                "key.clinteclient.server_mode", InputConstants.Type.KEYSYM,
-                GLFW.GLFW_KEY_L, category));
 
         ClientTickEvents.END_CLIENT_TICK.register(mc -> {
-            while (toggleKey.consumeClick()) hudEnabled = !hudEnabled;
-            while (serverModeKey.consumeClick()) {
-                serverScanAllowed = !serverScanAllowed;
-                if (!scanAllowed(mc)) scanner.stop();
+            while (menuKey.consumeClick()) {
+                if (mc.screen == null) mc.setScreen(new ClinteMenu());
             }
             while (scanKey.consumeClick()) {
                 if (scanAllowed(mc)) scanner.start(mc);
             }
             if (!scanAllowed(mc)) scanner.stop();
             else if (scanner.isScanning()) scanner.tick(mc);
+
+            tickModules(mc);
         });
 
         HudElementRegistry.attachElementBefore(
@@ -59,46 +56,59 @@ public class ClinteClient implements ClientModInitializer {
                 (g, delta) -> render(g));
     }
 
+    private static void tickModules(Minecraft mc) {
+        if (mc.player == null) return;
+
+        // Fullbright über den Nachtsicht-Effekt (nur visuell auf dem Client)
+        if (Settings.fullbright) {
+            mc.player.addEffect(new MobEffectInstance(MobEffects.NIGHT_VISION, 400, 0, false, false));
+        } else if (wasFullbright) {
+            mc.player.removeEffect(MobEffects.NIGHT_VISION);
+        }
+        wasFullbright = Settings.fullbright;
+
+        // Auto-Sprint: wie die vanilla "Sprint umschalten"-Option
+        if (Settings.autoSprint && mc.options.keyUp.isDown()) {
+            mc.options.keySprint.setDown(true);
+        }
+    }
+
     private static boolean isSingleplayer(Minecraft mc) {
         return mc.getSingleplayerServer() != null;
     }
 
-    /** Einzelspieler immer; auf Servern nur, wenn du es mit [L] ausdrücklich eingeschaltet hast. */
     private static boolean scanAllowed(Minecraft mc) {
-        return mc.level != null && (isSingleplayer(mc) || serverScanAllowed);
+        return mc.level != null && (isSingleplayer(mc) || Settings.serverScan);
     }
 
     private void render(GuiGraphics g) {
         Minecraft mc = Minecraft.getInstance();
-        if (!hudEnabled || mc.player == null || mc.options.hideGui) return;
+        if (!Settings.hud || mc.player == null || mc.options.hideGui) return;
 
         int y = 4;
         g.drawString(mc.font, "Clinte Client", 4, y, 0xFF55FFFF, true);
         y += 12;
-        g.drawString(mc.font, mc.getFps() + " FPS", 4, y, WHITE, true);
-        y += 10;
-        g.drawString(mc.font, String.format("XYZ: %.1f / %.1f / %.1f",
-                mc.player.getX(), mc.player.getY(), mc.player.getZ()), 4, y, WHITE, true);
-        y += 10;
-        g.drawString(mc.font, "Richtung: " + mc.player.getDirection().getName(), 4, y, WHITE, true);
-        y += 10;
-        int cx = mc.player.blockPosition().getX() >> 4;
-        int cz = mc.player.blockPosition().getZ() >> 4;
-        g.drawString(mc.font, "Chunk: " + cx + ", " + cz, 4, y, WHITE, true);
-        y += 10;
-
-        if (!isSingleplayer(mc)) {
-            g.drawString(mc.font, serverScanAllowed ? "Server-Scan: AN [L]" : "Server-Scan: aus [L]",
-                    4, y, serverScanAllowed ? 0xFFFFFF55 : 0xFFAAAAAA, true);
+        if (Settings.fps) {
+            g.drawString(mc.font, mc.getFps() + " FPS", 4, y, WHITE, true);
+            y += 10;
+        }
+        if (Settings.coords) {
+            g.drawString(mc.font, String.format("XYZ: %.1f / %.1f / %.1f",
+                    mc.player.getX(), mc.player.getY(), mc.player.getZ()), 4, y, WHITE, true);
+            y += 10;
+            g.drawString(mc.font, "Richtung: " + mc.player.getDirection().getName(), 4, y, WHITE, true);
+            y += 10;
+        }
+        if (Settings.chunkInfo) {
+            int cx = mc.player.blockPosition().getX() >> 4;
+            int cz = mc.player.blockPosition().getZ() >> 4;
+            g.drawString(mc.font, "Chunk: " + cx + ", " + cz, 4, y, WHITE, true);
             y += 10;
         }
 
         if (scanAllowed(mc)) {
             if (scanner.isScanning()) {
                 g.drawString(mc.font, "Sus-Scan läuft " + scanner.progress(), 4, y, 0xFFFFFF55, true);
-                y += 10;
-            } else {
-                g.drawString(mc.font, "[K] Sus-Chunks suchen", 4, y, 0xFFAAAAAA, true);
                 y += 10;
             }
             if (scanner.count() > 0) {
@@ -113,7 +123,7 @@ public class ClinteClient implements ClientModInitializer {
             }
         }
 
-        drawKeystrokes(g, mc);
+        if (Settings.keystrokes) drawKeystrokes(g, mc);
     }
 
     private void drawKeystrokes(GuiGraphics g, Minecraft mc) {
