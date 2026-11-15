@@ -1,6 +1,5 @@
 {
-  "key.clinteclient.toggle_hud": "HUD ein/aus",
   "key.category.clinteclient.main": "Clinte Client",
   "key.clinteclient.scan_chunks": "Sus-Chunks suchen",
-  "key.clinteclient.server_mode": "Chunk-Scan auf Servern erlauben"
+  "key.clinteclient.open_menu": "Menü öffnen"
 }
