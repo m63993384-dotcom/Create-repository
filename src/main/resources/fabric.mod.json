@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "clinteclient",
   "version": "${version}",
-  "name": "Clinte Client",
+  "name": "Claude Client",
   "description": "Ein kleiner Client mit HUD: FPS, Koordinaten, Keystrokes.",
   "authors": ["Clinte"],
   "license": "MIT",
